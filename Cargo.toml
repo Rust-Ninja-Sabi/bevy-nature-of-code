@@ -1,0 +1,20 @@
+[package]
+name = "rust-bevy-nature-of-code"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = "0.8"
+bevy_egui = "0.15"
+rand = "*"
+
+#cargo run --example hello_world
+[[example]]
+name = "one"
+path = "src/one.rs"
+
+[[example]]
+name = "two"
+path = "src/one.rs"
