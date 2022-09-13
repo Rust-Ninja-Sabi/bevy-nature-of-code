@@ -80,7 +80,7 @@ impl OrbitCamera {
 fn emit_motion_events(
     mut events: EventWriter<CameraEvents>,
     mut mouse_motion_events: EventReader<MouseMotion>,
-    mut res:Option<ResMut<EguiContext>>,
+    res:Option<ResMut<EguiContext>>,
     mouse_button_input: Res<Input<MouseButton>>,
     mut query: Query<&OrbitCamera>
 ){
@@ -92,7 +92,7 @@ fn emit_motion_events(
     }
     match res{
         Some(mut egui_context) => {
-            let mut context = egui_context.ctx_mut();
+            let context = egui_context.ctx_mut();
             if context.wants_pointer_input() {
                 send_event = false
             }

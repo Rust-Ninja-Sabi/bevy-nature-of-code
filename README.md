@@ -18,6 +18,12 @@ Video: https://www.youtube.com/watch?v=bKEaK7WNLzM&list=PLRqwX-V7Uu6ZV4yEcW3uDwO
 
 <img src="img/chapter1.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
+## chapter 2 _ Forces
+
+Book: https://natureofcode.com/book/chapter-2-forces/
+
+<img src="img/chapter2.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
 
 ```Rust
 

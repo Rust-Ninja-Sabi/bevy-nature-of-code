@@ -17,4 +17,4 @@ path = "src/one.rs"
 
 [[example]]
 name = "two"
-path = "src/one.rs"
+path = "src/two.rs"
