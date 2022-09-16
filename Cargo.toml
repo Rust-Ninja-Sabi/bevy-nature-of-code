@@ -18,3 +18,7 @@ path = "src/one.rs"
 [[example]]
 name = "two"
 path = "src/two.rs"
+
+[[example]]
+name = "three"
+path = "src/three.rs"
