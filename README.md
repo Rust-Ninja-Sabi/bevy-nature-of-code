@@ -30,6 +30,10 @@ Book: https://natureofcode.com/book/chapter-3-oscillation/
 
 <img src="img/chapter3.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
+## chapter 4 _ Particle Systems
+
+<img src="img/chapter4.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
 
 ```Rust
 
