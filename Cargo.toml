@@ -22,3 +22,7 @@ path = "src/two.rs"
 [[example]]
 name = "three"
 path = "src/three.rs"
+
+[[example]]
+name = "four"
+path = "src/four.rs"

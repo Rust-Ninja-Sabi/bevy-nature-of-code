@@ -93,7 +93,7 @@ fn spawn_scene(
         },
         transform: Transform {
             translation: Vec3::new(0.0, 4.0, 0.0),
-            rotation: Quat::from_rotation_x(-std::f32::consts::PI),
+            rotation: Quat::from_rotation_x(-PI),
             ..default()
         },
         ..default()
