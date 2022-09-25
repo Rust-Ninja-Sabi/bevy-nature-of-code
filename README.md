@@ -32,7 +32,15 @@ Book: https://natureofcode.com/book/chapter-3-oscillation/
 
 ## chapter 4 _ Particle Systems
 
+Book: https://natureofcode.com/book/chapter-4-particle-systems/
+
 <img src="img/chapter4.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
+## chapter 5 _ Autonomous Agentss
+
+Book: https://natureofcode.com/book/chapter-6-autonomous-agents/
+
+<img src="img/chapter5.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
 
 ```Rust

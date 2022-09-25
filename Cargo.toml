@@ -26,3 +26,11 @@ path = "src/three.rs"
 [[example]]
 name = "four"
 path = "src/four.rs"
+
+[[example]]
+name = "five"
+path = "src/five.rs"
+
+[[example]]
+name = "five_group"
+path = "src/five_group.rs.rs"
