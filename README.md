@@ -36,7 +36,7 @@ Book: https://natureofcode.com/book/chapter-4-particle-systems/
 
 <img src="img/chapter4.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
-## chapter 5 _ Autonomous Agentss
+## chapter 5 _ Autonomous Agents
 
 Book: https://natureofcode.com/book/chapter-6-autonomous-agents/
 
