@@ -33,4 +33,4 @@ path = "src/five.rs"
 
 [[example]]
 name = "five_group"
-path = "src/five_group.rs.rs"
+path = "src/five_group.rs"

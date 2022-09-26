@@ -1,39 +1,22 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext, EguiPlugin};
 use bevy::render::mesh::PrimitiveTopology;
 
 use orbitcamera::{OrbitCameraPlugin,OrbitCamera};
 mod orbitcamera;
 
 use rand::Rng;
-use std::f32::consts::PI;
 
 const HEIGHT: f32 = 640.0;
 const WIDTH: f32 = 960.0;
 
-const MAX_LIMIT: f32 = 16.0;
-const MIN_LIMIT: f32 = -16.0;
+const MAX_LIMIT: f32 = 32.0;
+const MIN_LIMIT: f32 = -32.0;
 
-struct Triangle {
-    points:Vec<usize>,
-    face_normal: Vec3
-}
+const NUM_MOVEABLE: u32 = 1024;
+struct Mover(Vec<u32>);
 
-impl Triangle {
-    fn calculate_normal(p0:Vec3,p1:Vec3,p2:Vec3)->Vec3{
-        let v0 =p1- p0;
-        let v1 = p2 - p0;
-        v0.cross(v1).normalize()
-    }
-}
-
-struct UiValues{
-    wind: bool,
-    num_of_spheres: u8
-}
-
-const MAX_SPEED:f32=16.0;
-const MAX_FORCE:f32=8.0;
+const MAX_SPEED:f32=32.0;
+const MAX_FORCE:f32=16.0;
 
 #[derive(Component)]
 struct Moveable {
@@ -127,94 +110,21 @@ struct Evade {}
 #[derive(Component)]
 struct Arrive {}
 
-trait Cone {
-    fn from_cone(subdivision:usize, radius:f32, height:f32)-> Mesh;
+#[derive(Component)]
+struct Align {
+    weight:f32
 }
 
-impl Cone for Mesh {
-    fn from_cone(subdivision:usize, radius:f32, height:f32)-> Mesh {
-        let mut vertices: Vec<Vec3> = Vec::new();
-        let mut uv: Vec<Vec2> = Vec::new();
-
-        vertices.push(Vec3::ZERO);
-        uv.push(Vec2::new(0.5, 0.0));
-
-        let n = subdivision - 1;
-
-        for i in 0..subdivision {
-            let ratio = i as f32 / n as f32;
-            let r = ratio * PI * 2.0;
-            let x = r.cos() * radius;
-            let z = r.sin() * radius;
-            vertices.push(Vec3::new(x, 0.0, z));
-
-            uv.push(Vec2::new(ratio, 0.0));
-        }
-        vertices.push(Vec3::new(0.0, height, 0.0));
-        uv.push(Vec2::new(0.5, 1.0));
-
-        //bottom
-
-        let mut triangles: Vec<Triangle> = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
-
-        for i in 0..(subdivision - 1) {
-            indices.push(0);
-            indices.push((i + 1) as u32);
-            indices.push((i + 2) as u32);
-            triangles.push(Triangle {
-                points: vec![0, i + 1, i + 2],
-                face_normal: Triangle::calculate_normal(vertices[0],vertices[i+1],vertices[i+2])
-            });
-        }
-
-        //sides
-        for i in 0..(subdivision - 1) {
-            indices.push((i + 1) as u32);
-            indices.push((subdivision + 1) as u32);
-            indices.push((i + 2) as u32);
-            triangles.push(Triangle {
-                points: vec![i + 1, subdivision + 1, i + 2],
-                face_normal: Triangle::calculate_normal(vertices[i + 1],vertices[subdivision + 1],vertices[i + 2])
-            });
-        }
-        //mesh
-
-        let mut positions = Vec::new();
-        let mut normals = Vec::new();
-        let mut uvs = Vec::new();
-
-        let vert_len = vertices.len();
-
-        for j in vertices {
-            positions.push([j.x, j.y, j.z]);
-        }
-
-        for i in 0..vert_len  {
-            let mut n = Vec3::ZERO;
-            for t in &triangles{
-                if t.points.contains(&i) {
-                    n = n + t.face_normal;
-                }
-            }
-            n = n.normalize();
-            normals.push([n.x, n.y, n.z]);
-        }
-
-        for j in uv {
-            uvs.push([j.x,j.y]);
-        }
-
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-
-        mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-
-        mesh
-    }
+#[derive(Component)]
+struct Separate {
+    weight:f32
 }
+
+#[derive(Component)]
+struct Cohesion {
+    weight:f32
+}
+
 
 fn main() {
     App::new()
@@ -223,27 +133,25 @@ fn main() {
         .insert_resource(WindowDescriptor{
             width: WIDTH,
             height: HEIGHT,
-            title:"Example 5".to_string(),
+            title:"Example 5 Group".to_string(),
             resizable: false,
             ..Default::default()
         })
-        .insert_resource(UiValues{
-            wind: true,
-            num_of_spheres: 1
-        })
+        .insert_resource(Mover(Vec::new()))
         .add_plugins(DefaultPlugins)
-        .add_plugin(EguiPlugin)
         .add_plugin(OrbitCameraPlugin)
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_scene)
         .add_startup_system(spawn_limit_cube)
-        .add_system(ui_egui)
         .add_system(update_seek.before(moving))
         .add_system(update_flee.before(moving))
         .add_system(update_random.before(moving))
         .add_system(update_pursue.before(moving))
         .add_system(update_evade.before(moving))
         .add_system(update_arrive.before(moving))
+        .add_system(update_align.before(moving))
+        .add_system(update_separate.before(moving))
+        .add_system(update_cohesion.before(moving))
         .add_system(moving)
         .run();
 }
@@ -253,6 +161,7 @@ fn spawn_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
+    mut mover: ResMut<Mover>
 ){
     //light
     commands.spawn_bundle(DirectionalLightBundle {
@@ -273,8 +182,14 @@ fn spawn_scene(
         brightness: 0.02,
     });
     //vehicle
-    for _ in 0..32{
-        commands.spawn_bundle(SceneBundle {
+    for _ in 0..NUM_MOVEABLE{
+        let mut rng = rand::thread_rng();
+        let velocity = Vec3::new(
+            rng.gen_range(-4.0..4.0),
+            rng.gen_range(-4.0..4.0),
+            rng.gen_range(-4.0..4.0)
+        );
+        let entity = commands.spawn_bundle(SceneBundle {
             scene: asset_server.load("models/cone_blue.glb#Scene0"),
             transform: Transform {
                 translation: rnd_position(),
@@ -282,8 +197,22 @@ fn spawn_scene(
             },
             ..Default::default()
         })
-            .insert(Moveable { ..default() })
-            .insert(Arrive {});
+            .insert(Moveable {
+                velocity: velocity,
+                ..default() })
+            .insert(Align {
+                weight: 1.0
+            })
+            .insert(Separate{
+                weight: 1.0
+            })
+            .insert(Cohesion{
+                weight: 1.0
+            })
+            .id();
+
+        mover.0.push(entity.id());
+
     }
     //target
     commands.spawn_bundle(PbrBundle {
@@ -394,6 +323,159 @@ fn update_arrive(
         moveable.force += new_force;
     }
 }
+
+fn update_align(
+    mover: Res<Mover>,
+    mut query: Query<(Entity, &mut Moveable, &Transform, &mut Align)>
+) {
+    let neighbor_distance = 8.0;
+
+    for i in 0..NUM_MOVEABLE {
+
+        let mover_id = mover.0[i as usize];
+        let mut sum = Vec3::ZERO;
+        let mut count = 0;
+
+        for j in 0..NUM_MOVEABLE {
+
+            let other_mover_id = mover.0[j as usize];
+
+            if mover_id == other_mover_id {
+                continue;
+            }
+
+            let first_position:Vec3;
+            {
+                let en = Entity::from_raw(mover_id);
+                let (_,_,transform_1,_) = query.get_mut(en).unwrap();
+                first_position = transform_1.translation.clone();
+            }
+            let second_position:Vec3;
+            let second_velocity:Vec3;
+            {
+                let en2 = Entity::from_raw(other_mover_id);
+                let (_,moveable_2,transform_2,_)= query.get_mut(en2).unwrap();
+                second_position = transform_2.translation.clone();
+                second_velocity = moveable_2.velocity.clone();
+            }
+            if first_position.distance(second_position) < neighbor_distance {
+                count += 1;
+                sum += second_velocity;
+            }
+        }
+        if count > 0{
+            let en = Entity::from_raw(mover_id);
+            let (_, mut moveable, _, align) = query.get_mut(en).unwrap();
+            sum = sum * (1.0/ count as f32);
+            sum = sum.normalize() * moveable.maximum_speed;
+            let new_force = moveable.force + align.weight * (sum-moveable.velocity).clamp_length(0.0, moveable.maximum_force);
+            moveable.force = new_force;
+        }
+    }
+}
+
+fn update_separate(
+    mover: Res<Mover>,
+    mut query: Query<(Entity, &mut Moveable, &Transform, &mut Separate)>
+) {
+    let desired_separation  = 2.0;
+
+    for i in 0..NUM_MOVEABLE {
+
+        let mover_id = mover.0[i as usize];
+        let mut sum = Vec3::ZERO;
+        let mut count = 0;
+
+        for j in 0..NUM_MOVEABLE {
+
+            let other_mover_id = mover.0[j as usize];
+
+            if mover_id == other_mover_id {
+                continue;
+            }
+
+            let first_position:Vec3;
+            {
+                let en = Entity::from_raw(mover_id);
+                let (_,_,transform_1,_) = query.get_mut(en).unwrap();
+                first_position = transform_1.translation.clone();
+            }
+            let second_position:Vec3;
+            {
+                let en2 = Entity::from_raw(other_mover_id);
+                let (_,_,transform_2,_)= query.get_mut(en2).unwrap();
+                second_position = transform_2.translation.clone();
+            }
+            let dist = first_position.distance(second_position);
+            if dist < desired_separation {
+
+                let mut diff = first_position - second_position;
+                diff = diff.normalize();
+                diff = diff * 1.0/dist;
+                count += 1;
+                sum += diff;
+            }
+        }
+        if count > 0{
+            let en = Entity::from_raw(mover_id);
+            let (_, mut moveable, _, separate) = query.get_mut(en).unwrap();
+            sum = sum * (1.0/ count as f32);
+            sum = sum.normalize() * moveable.maximum_speed;
+            let new_force = moveable.force + separate.weight * (sum-moveable.velocity).clamp_length(0.0, moveable.maximum_force);
+            moveable.force = new_force;
+        }
+    }
+}
+
+fn update_cohesion(
+    mover: Res<Mover>,
+    mut query: Query<(Entity, &mut Moveable, &Transform, &mut Cohesion)>
+) {
+    let neighbor_distance = 8.0;
+
+    for i in 0..NUM_MOVEABLE {
+
+        let mover_id = mover.0[i as usize];
+        let mut sum = Vec3::ZERO;
+        let mut count = 0;
+
+        for j in 0..NUM_MOVEABLE {
+
+            let other_mover_id = mover.0[j as usize];
+
+            if mover_id == other_mover_id {
+                continue;
+            }
+
+            let first_position:Vec3;
+            {
+                let en = Entity::from_raw(mover_id);
+                let (_,_,transform_1,_) = query.get_mut(en).unwrap();
+                first_position = transform_1.translation.clone();
+            }
+            let second_position:Vec3;
+            {
+                let en2 = Entity::from_raw(other_mover_id);
+                let (_,_,transform_2,_)= query.get_mut(en2).unwrap();
+                second_position = transform_2.translation.clone();
+            }
+            let dist = first_position.distance(second_position);
+            if dist < neighbor_distance {
+                count += 1;
+                sum += second_position;
+            }
+        }
+        if count > 0{
+            let en = Entity::from_raw(mover_id);
+            let (_, mut moveable, transform, cohesion) = query.get_mut(en).unwrap();
+            sum = sum * (1.0/ count as f32);
+
+            let new_force = moveable.force + moveable.seek(sum,transform.translation) * cohesion.weight;
+            moveable.force = new_force;
+        }
+    }
+}
+
 const EDGE_LIMIT:bool=true;
 
 fn moving(
@@ -489,14 +571,4 @@ fn spawn_limit_cube(
             material: materials.add(Color::LIME_GREEN.into()),
             ..Default::default()
         });
-}
-
-fn ui_egui(
-    mut egui_context: ResMut<EguiContext>,
-    mut ui_values: ResMut<UiValues>,
-){
-    egui::Window::new("Properties").show(egui_context.ctx_mut(), |ui|{
-        ui.add(egui::Slider::new(&mut (ui_values.num_of_spheres), 1..=20).text("Spheres p. Sec."));
-        ui.add(egui::Checkbox::new(&mut (ui_values.wind),"wind"));
-    });
 }
