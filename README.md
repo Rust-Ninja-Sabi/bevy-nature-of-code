@@ -42,6 +42,8 @@ Book: https://natureofcode.com/book/chapter-6-autonomous-agents/
 
 <img src="img/chapter5.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
+<img src="img/chapter5group.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
 
 ```Rust
 
