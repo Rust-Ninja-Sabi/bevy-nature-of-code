@@ -44,6 +44,9 @@ Book: https://natureofcode.com/book/chapter-6-autonomous-agents/
 
 <img src="img/chapter5group.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
+Inspired by SimonDev Flocking Simulation: Boids (JavaScript)  
+https://www.youtube.com/watch?v=LltugBg4dtk
+
 <img src="img/chapter5space.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
 
