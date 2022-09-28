@@ -34,3 +34,11 @@ path = "src/five.rs"
 [[example]]
 name = "five_group"
 path = "src/five_group.rs"
+
+[[example]]
+name = "five_space"
+path = "src/five_space.rs"
+
+[[example]]
+name = "five_spaceb"
+path = "src/five_spaceb.rs"
