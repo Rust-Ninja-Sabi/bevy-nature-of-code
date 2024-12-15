@@ -1,11 +1,14 @@
+use std::time::Duration;
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext, EguiPlugin};
-use bevy::time::FixedTimestep;
-use bevy::render::mesh::PrimitiveTopology;
+use bevy::color::palettes::basic::BLUE;
+use bevy::time::common_conditions::on_timer;
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy::window::WindowResolution;
+use orbitcamera::{OrbitCameraPlugin, OrbitCamera};
+use crate::mesh::spawn_limit_cube;
 
-use orbitcamera::{OrbitCameraPlugin,OrbitCamera};
 mod orbitcamera;
-
+mod mesh;
 use rand::Rng;
 
 const HEIGHT: f32 = 640.0;
@@ -14,6 +17,7 @@ const WIDTH: f32 = 960.0;
 const MAX_LIMIT: f32 = 8.0;
 const MIN_LIMIT: f32 = -8.0;
 
+#[derive(Resource)]
 struct UiValues{
     wind: bool,
     num_of_spheres: u8
@@ -45,32 +49,35 @@ impl Moveable {
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::WHITE))
-        .insert_resource(Msaa { samples: 4 })
-        .insert_resource(WindowDescriptor{
-            width: WIDTH,
-            height: HEIGHT,
-            title:"Example 2.1 2.2".to_string(),
-            resizable: false,
-            ..Default::default()
-        })
+
         .insert_resource(UiValues{
             wind: true,
             num_of_spheres: 1
         })
-        .add_plugins(DefaultPlugins)
-        .add_plugin(EguiPlugin)
-        .add_plugin(OrbitCameraPlugin)
-        .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_scene)
-        .add_startup_system(spawn_limit_cube)
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(1.0))
-                .with_system(spawn_sphere)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Example 2.1 2.2".to_string(),
+                resolution: WindowResolution::new(WIDTH,  HEIGHT),
+                resizable: false,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins((
+            EguiPlugin,
+            OrbitCameraPlugin
+        ))
+        .add_systems(Startup, (spawn_camera,
+                               spawn_scene,spawn_limit_cube)
         )
-        .add_system(ui_egui)
-        .add_system(despawn_sphere)
-        .add_system(moving)
+        .add_systems(
+            Update,
+            spawn_sphere.run_if(on_timer(Duration::from_secs(1))),
+        )
+        .add_systems(Update, (ui_egui,
+                              despawn_sphere,
+                              moving)
+        )
         .run();
 }
 
@@ -78,18 +85,17 @@ fn spawn_scene(
     mut commands:Commands,
 ){
     //light
-    commands.spawn_bundle(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+                       DirectionalLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform {
+        Transform {
             translation: Vec3::new(0.0, 4.0, 0.0),
             rotation: Quat::from_rotation_x(-std::f32::consts::PI),
             ..default()
-        },
-        ..default()
-    });
+        }
+    ));
     // ambient light
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
@@ -100,13 +106,14 @@ fn spawn_scene(
 fn spawn_camera(
     mut commands:Commands
 ){
-    commands.spawn_bundle(Camera3dBundle{
-        ..default()
-    })
-        .insert(OrbitCamera{
+    commands.spawn((
+        Camera3d::default(),
+        Msaa::Sample4,
+        OrbitCamera{
             distance : 28.0,
             ..default()
-        });
+        }
+    ));
 }
 
 fn spawn_sphere(
@@ -118,23 +125,23 @@ fn spawn_sphere(
     for _ in 1..=ui_values.num_of_spheres {
         let mut rng = rand::thread_rng();
         let mass = rng.gen_range(1.0..2.4);
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::UVSphere {
+        commands.spawn((
+            Mesh3d(meshes.add(Mesh::from(Sphere {
                 radius: 0.5 * mass,
-                sectors: 32,
-                stacks: 32
+            }))),
+            MeshMaterial3d( materials.add( StandardMaterial {
+                base_color: Color::Srgba(BLUE),
+                ..Default::default()
             })),
-            material: materials.add(Color::BLUE.into()),
-            transform: Transform::from_xyz(rng.gen_range(MIN_LIMIT + 1.0..MAX_LIMIT),
+            Transform::from_xyz(rng.gen_range(MIN_LIMIT + 1.0..MAX_LIMIT),
                                            MAX_LIMIT,
                                            rng.gen_range(MIN_LIMIT + 1.0..MAX_LIMIT)),
-            ..default()
-        })
-            .insert(Moveable {
+            Moveable {
                 velocity: Vec3::new(0.0, 0.0, 0.0),
                 mass: mass,
                 ..default()
-            });
+            }
+        ));
     }
 }
 
@@ -164,77 +171,19 @@ fn moving(
         }
         moveable.apply_force(gravity);
 
-        moveable.velocity = moveable.velocity + moveable.acceleration * time.delta_seconds();
-        transform.translation = transform.translation + moveable.velocity * time.delta_seconds();
+        moveable.velocity = moveable.velocity + moveable.acceleration * time.delta_secs();
+        transform.translation = transform.translation + moveable.velocity * time.delta_secs();
 
         moveable.acceleration *= 0.0;
     }
 }
 
-fn spawn_limit_cube(
-    mut commands:Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-){
-    let min_limit = MIN_LIMIT;
-    let max_limit= MAX_LIMIT;
-
-    let ind = vec![vec![0, 1, 2, 3, 0],
-                                  vec![4, 5, 6, 7, 4],
-                                  vec![0, 4],vec![1, 5],vec![2, 6],vec![3, 7]];
-
-    let mut indices:Vec<u32> = Vec::new();
-    indices.push(0);
-    indices.push(1);
-
-    let mut positions = Vec::new();
-    for l in vec![max_limit, min_limit] {
-        positions.push([max_limit, l, max_limit]);
-        positions.push([max_limit, l, min_limit]);
-        positions.push([min_limit, l, min_limit]);
-        positions.push([min_limit, l, max_limit]);
-    }
-
-    let mut normals = Vec::new();
-    for _ in 0..8 {
-        normals.push([0.0, 1.0, 0.0]);
-    }
-
-    let mut indices:Vec<u32> = Vec::new();
-
-    for k in ind {
-        let mut j = 0;
-        let mut first = true;
-
-        for i in k {
-            if !first {
-                indices.push(j);
-                indices.push(i);
-            } else {
-                first = false
-            };
-            j = i;
-        }
-    }
-    let mut mesh = Mesh::new(PrimitiveTopology::LineList);
-
-    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-
-    commands
-        .spawn_bundle(PbrBundle {
-            mesh: meshes.add(mesh),
-            material: materials.add(Color::LIME_GREEN.into()),
-            ..Default::default()
-        });
-}
 
 fn ui_egui(
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_contexts: EguiContexts,
     mut ui_values: ResMut<UiValues>,
 ){
-    egui::Window::new("Properties").show(egui_context.ctx_mut(), |ui|{
+    egui::Window::new("Properties").show(egui_contexts.ctx_mut(), |ui|{
         ui.add(egui::Slider::new(&mut (ui_values.num_of_spheres), 1..=20).text("Spheres p. Sec."));
         ui.add(egui::Checkbox::new(&mut (ui_values.wind),"wind"));
     });

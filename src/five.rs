@@ -3,9 +3,13 @@ use bevy::render::mesh::PrimitiveTopology;
 
 use orbitcamera::{OrbitCameraPlugin,OrbitCamera};
 mod orbitcamera;
+mod mesh;
 
 use rand::Rng;
 use std::f32::consts::PI;
+use bevy::color::palettes::basic::YELLOW;
+use bevy::window::WindowResolution;
+use bevy_egui::EguiPlugin;
 
 const HEIGHT: f32 = 640.0;
 const WIDTH: f32 = 960.0;
@@ -199,9 +203,12 @@ impl Cone for Mesh {
             uvs.push([j.x,j.y]);
         }
 
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD
+        );
 
-        mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+        mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
@@ -213,26 +220,27 @@ impl Cone for Mesh {
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::WHITE))
-        .insert_resource(Msaa { samples: 4 })
-        .insert_resource(WindowDescriptor{
-            width: WIDTH,
-            height: HEIGHT,
-            title:"Example 5".to_string(),
-            resizable: false,
-            ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
-        .add_plugin(OrbitCameraPlugin)
-        .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_scene)
-        .add_startup_system(spawn_limit_cube)
-        .add_system(update_seek.before(moving))
-        .add_system(update_flee.before(moving))
-        .add_system(update_random.before(moving))
-        .add_system(update_pursue.before(moving))
-        .add_system(update_evade.before(moving))
-        .add_system(update_arrive.before(moving))
-        .add_system(moving)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Example 5".to_string(),
+                resolution: WindowResolution::new(WIDTH,  HEIGHT),
+                resizable: false,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins((OrbitCameraPlugin,
+                      EguiPlugin))
+        .add_systems(Startup ,(spawn_camera,
+                               spawn_scene,
+                               mesh::spawn_limit_cube))
+        .add_systems( Update, (update_seek.before(moving),
+                               update_flee.before(moving),
+                               update_random.before(moving),
+                               update_pursue.before(moving),
+                               update_evade.before(moving),
+                               update_arrive.before(moving)))
+        .add_systems(Update, moving)
         .run();
 }
 
@@ -243,18 +251,17 @@ fn spawn_scene(
     asset_server: Res<AssetServer>,
 ){
     //light
-    commands.spawn_bundle(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((DirectionalLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform {
+        Transform {
             translation: Vec3::new(0.0, MAX_LIMIT, 0.0),
             rotation: Quat::from_rotation_x(-std::f32::consts::PI),
             ..default()
-        },
-        ..default()
-    });
+        }
+    ));
+
     // ambient light
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
@@ -262,31 +269,28 @@ fn spawn_scene(
     });
     //vehicle
     for _ in 0..32{
-        commands.spawn_bundle(SceneBundle {
-            scene: asset_server.load("models/cone_blue.glb#Scene0"),
-            transform: Transform {
+        commands.spawn((
+                           SceneRoot (asset_server.load("models/cone_blue.glb#Scene0")),
+            Transform {
                 translation: rnd_position(),
                 ..default()
             },
-            ..Default::default()
-        })
-            .insert(Moveable { ..default() })
-            .insert(Arrive {});
+                           Moveable { ..default() },
+                       Arrive {}
+        ));
     }
     //target
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere {
-            radius: 0.5,
-            sectors: 32,
-            stacks: 32
+    commands.spawn((
+        Mesh3d( meshes.add(Mesh::from(Sphere { radius: 0.5}))),
+        MeshMaterial3d( materials.add( StandardMaterial {
+            base_color: Color::Srgba(YELLOW),
+            ..Default::default()
         })),
-        material: materials.add(Color::YELLOW.into()),
-        transform: Transform::from_translation(Vec3::ZERO),
-        ..default()
-    })
-        .insert(Moveable{..default()})
-        .insert(Random{})
-        .insert(Target{});
+       Transform::from_translation(Vec3::ZERO),
+        Moveable{..default()},
+        Random{},
+        Target{}
+    ));
 }
 
 fn rnd_position()->Vec3 {
@@ -301,13 +305,14 @@ fn rnd_position()->Vec3 {
 fn spawn_camera(
     mut commands:Commands
 ){
-    commands.spawn_bundle(Camera3dBundle{
-        ..default()
-    })
-        .insert(OrbitCamera{
-            distance : 56.0,
+    commands.spawn((
+        Camera3d::default(),
+        Msaa::Sample4,
+        OrbitCamera{
+            distance : 28.0,
             ..default()
-        });
+        }
+    ));
 }
 
 fn update_seek(
@@ -394,7 +399,7 @@ fn moving(
         moveable.apply_force(force);
         moveable.force *= 0.0;
 
-        moveable.velocity = moveable.velocity + moveable.acceleration * time.delta_seconds();
+        moveable.velocity = moveable.velocity + moveable.acceleration * time.delta_secs();
 
         if EDGE_LIMIT {
             if transform.translation.x > MAX_LIMIT || transform.translation.x < MIN_LIMIT {
@@ -410,7 +415,7 @@ fn moving(
             }
         }
 
-        transform.translation = transform.translation + moveable.velocity * time.delta_seconds();
+        transform.translation = transform.translation + moveable.velocity * time.delta_secs();
 
         moveable.acceleration *= 0.0;
 
@@ -420,61 +425,3 @@ fn moving(
     }
 }
 
-fn spawn_limit_cube(
-    mut commands:Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-){
-    let min_limit = MIN_LIMIT;
-    let max_limit= MAX_LIMIT;
-
-    let ind = vec![vec![0, 1, 2, 3, 0],
-                                  vec![4, 5, 6, 7, 4],
-                                  vec![0, 4],vec![1, 5],vec![2, 6],vec![3, 7]];
-
-    let mut indices:Vec<u32> = Vec::new();
-    indices.push(0);
-    indices.push(1);
-
-    let mut positions = Vec::new();
-    for l in vec![max_limit, min_limit] {
-        positions.push([max_limit, l, max_limit]);
-        positions.push([max_limit, l, min_limit]);
-        positions.push([min_limit, l, min_limit]);
-        positions.push([min_limit, l, max_limit]);
-    }
-
-    let mut normals = Vec::new();
-    for _ in 0..8 {
-        normals.push([0.0, 1.0, 0.0]);
-    }
-
-    let mut indices:Vec<u32> = Vec::new();
-
-    for k in ind {
-        let mut j = 0;
-        let mut first = true;
-
-        for i in k {
-            if !first {
-                indices.push(j);
-                indices.push(i);
-            } else {
-                first = false
-            };
-            j = i;
-        }
-    }
-    let mut mesh = Mesh::new(PrimitiveTopology::LineList);
-
-    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-
-    commands
-        .spawn_bundle(PbrBundle {
-            mesh: meshes.add(mesh),
-            material: materials.add(Color::LIME_GREEN.into()),
-            ..Default::default()
-        });
-}

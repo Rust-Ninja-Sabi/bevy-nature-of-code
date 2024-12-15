@@ -1,5 +1,8 @@
+use bevy::color::palettes::basic::LIME;
+use bevy::color::palettes::css::GRAY;
 use bevy::prelude::*;
-
+use bevy::window::WindowResolution;
+use bevy_egui::EguiPlugin;
 use orbitcamera::{OrbitCameraPlugin,OrbitCamera};
 use skybox::SkyboxPlugin;
 
@@ -15,6 +18,7 @@ const MAX_LIMIT: f32 = 32.0;
 const MIN_LIMIT: f32 = -32.0;
 
 const NUM_MOVEABLE: u32 = 256;
+#[derive(Resource)]
 struct Mover(Vec<u32>);
 
 const MAX_SPEED:f32=32.0;
@@ -51,7 +55,7 @@ impl Ray {
     fn new(orign:Vec3, direction:Vec3)->Self{
         Ray {
             origin:orign,
-            direction:direction
+            direction
         }
     }
 
@@ -75,7 +79,7 @@ impl Ray {
         }
 
         if tmin > tymax || tymin > tmax {
-            return Option::None
+            return None
         };
 
         if tymin > tmin {
@@ -96,7 +100,7 @@ impl Ray {
         }
 
         if tmin > tzmax || tzmin > tmax {
-            return Option::None;
+            return None;
         }
 
         if tzmin > tmin {
@@ -107,7 +111,7 @@ impl Ray {
             tmax = tzmax;
         }
 
-        Option::Some((Vec3::new(tmin,tymin,tzmin),Vec3::new(tmax,tymax,tzmax)))
+        Some((Vec3::new(tmin,tymin,tzmin),Vec3::new(tmax,tymax,tzmax)))
     }
 }
 
@@ -251,33 +255,30 @@ struct Team {
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::WHITE))
-        .insert_resource(Msaa { samples: 4 })
-        .insert_resource(WindowDescriptor{
-            width: WIDTH,
-            height: HEIGHT,
-            title:"Example 5 Group".to_string(),
-            resizable: false,
-            ..Default::default()
-        })
         .insert_resource(Mover(Vec::new()))
-        .add_plugins(DefaultPlugins)
-        .add_plugin(OrbitCameraPlugin)
-        .add_plugin(SkyboxPlugin)
-        .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_scene)
-        .add_system(update_seek.before(moving))
-        //.add_system(update_flee.before(moving))
-        .add_system(update_random.before(moving))
-        //.add_system(update_pursue.before(moving))
-        //.add_system(update_evade.before(moving))
-        //.add_system(update_arrive.before(moving))
-        .add_system(update_align.before(moving))
-        .add_system(update_separate.before(moving))
-        .add_system(update_cohesion.before(moving))
-        .add_system(update_collision.before(moving))
-        .add_system(spawn_laser)
-        .add_system(move_laser)
-        .add_system(moving)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Example 5".to_string(),
+                resolution: WindowResolution::new(WIDTH,  HEIGHT),
+                resizable: false,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins((OrbitCameraPlugin,
+                      SkyboxPlugin,
+                      EguiPlugin))
+        .add_systems(Startup, (spawn_camera,
+                               spawn_scene))
+        .add_systems(Update, (update_seek.before(moving),
+                              update_random.before(moving),
+                              update_align.before(moving),
+                              update_separate.before(moving),
+                              update_cohesion.before(moving),
+                              update_collision.before(moving),
+                              spawn_laser,
+                              move_laser,
+                              moving))
         .run();
 }
 
@@ -289,19 +290,19 @@ fn spawn_scene(
     mut mover: ResMut<Mover>
 ){
     //light
-    commands.spawn_bundle(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             shadows_enabled: true,
             illuminance: 50000.0,
             ..default()
         },
-        transform: Transform {
+        Transform {
             translation: Vec3::new(0.0, 80.0, 0.0),
             rotation: Quat::from_rotation_x(-std::f32::consts::PI/2.0),
             ..default()
-        },
-        ..default()
-    });
+        }
+    ));
+
     // ambient light
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
@@ -316,12 +317,14 @@ fn spawn_scene(
 
     for i in 0..2 {
 
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Box::new(70.0,8.0,25.0))),
-            material: materials.add(Color::GRAY.into()),
-            transform: Transform::from_translation(cruiser_position[i]),
-            ..default()
-        });
+        commands.spawn((
+            Mesh3d( meshes.add(Mesh::from(Cuboid::new(70.0,8.0,25.0)))),
+            MeshMaterial3d( materials.add( StandardMaterial {
+            base_color: Color::Srgba(GRAY),
+                ..Default::default()
+            })),
+            Transform::from_translation(cruiser_position[i])
+        ));
 
         //vehicle
         for _ in 0..NUM_MOVEABLE/2 {
@@ -331,48 +334,41 @@ fn spawn_scene(
                 rng.gen_range(-4.0..4.0),
                 rng.gen_range(-4.0..4.0)
             );
-            let entity = commands.spawn_bundle(SceneBundle {
-                scene: asset_server.load(fighters[i]),
-                transform: Transform {
+            let entity = commands.spawn((
+                SceneRoot(asset_server.load(fighters[i])),
+                Transform {
                     translation: rnd_position(),
                     ..default()
                 },
-                ..Default::default()
-            })
-                .insert(Moveable {
-                    velocity: velocity,
+                Moveable {
+                    velocity,
                     ..default()
-                })
-                .insert(Align {
+                },
+                Align {
                     weight: 1.0
-                })
-                .insert(Separate {
+                },
+                Separate {
                     weight: 4.0
-                })
-                .insert(Cohesion {
+                },
+                Cohesion {
                     weight: 0.5
-                })
-                .insert(Random{
+                },
+                Random{
                     weight:0.5
-                })
-                .insert(Collision{
-                    weight:7.0,
-                    position: cruiser_position[i],
-                    aabb: AabBox::new(cruiser_position[i],70.0,8.0,25.0,4.0)
-                })
-                .insert(Seek{
+                },
+                Seek{
                     weight:5.0,
                     target: cruiser_position[i]
-                })
-                .insert(Team{
+                },
+                Team{
                     value:teams[i].clone()
-                })
-                .insert(SpawnLaser{
+                },
+                SpawnLaser{
                     cooldown:rng.gen_range(0.0..=COOLDOWN)
-                })
-                .id();
+                }
+            )).id();
 
-            mover.0.push(entity.id());
+            mover.0.push(entity.index());
         }
     }
 
@@ -390,13 +386,14 @@ fn rnd_position()->Vec3 {
 fn spawn_camera(
     mut commands:Commands
 ){
-    commands.spawn_bundle(Camera3dBundle{
-        ..default()
-    })
-        .insert(OrbitCamera{
+    commands.spawn((
+        Camera3d::default(),
+        Msaa::Sample4,
+        OrbitCamera{
             distance : 56.0,
             ..default()
-        });
+        }
+    ));
 }
 
 fn update_seek(
@@ -634,7 +631,7 @@ fn update_collision(
 ) {
 
     for (mut moveable,transform,collision) in query.iter_mut() {
-        let ray = Ray::new(transform.translation, transform.forward());
+        let ray = Ray::new(transform.translation, *transform.forward());
 
         match ray.intersect_box(&collision.aabb) {
             Some((result_1,result_2))=>{
@@ -673,7 +670,7 @@ fn moving(
         moveable.apply_force(force);
         moveable.force *= 0.0;
 
-        moveable.velocity = moveable.velocity + moveable.acceleration * time.delta_seconds();
+        moveable.velocity = moveable.velocity + moveable.acceleration * time.delta_secs();
 
         if EDGE_LIMIT {
             if transform.translation.x > MAX_LIMIT || transform.translation.x < MIN_LIMIT {
@@ -689,7 +686,7 @@ fn moving(
             }
         }
 
-        transform.translation = transform.translation + moveable.velocity * time.delta_seconds();
+        transform.translation = transform.translation + moveable.velocity * time.delta_secs();
 
         moveable.acceleration *= 0.0;
 
@@ -720,25 +717,24 @@ fn spawn_laser(
                 let z_length = 3.9;
                 let position = transform.translation.clone() + transform.forward() * z_length/2.0;
 
-                commands.spawn_bundle(PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Box::new(0.1, 0.1, z_length))),
-                    material: materials.add(StandardMaterial {
-                        base_color: Color::LIME_GREEN,
-                        emissive: Color::LIME_GREEN,
+                commands.spawn((
+                    Mesh3d(meshes.add(Mesh::from(Cuboid::new(0.1, 0.1, z_length)))),
+                    MeshMaterial3d(materials.add( StandardMaterial {
+                        base_color: Color::Srgba(LIME),
+                        emissive: Color::Srgba(LIME).into(),
                         ..Default::default()
-                    }),
-                    transform: Transform {
+                    })),
+                    Transform {
                         translation: position,
                         rotation: transform.rotation.clone(),
                         scale: Vec3::new(1.0, 1.0, 1.0),
                         ..default()
                     },
-                    ..Default::default()
-                })
-                    .insert(Name::new("Laser"))
-                    .insert(Laser{time:LASER_TIME});
+                    Name::new("Laser"),
+                    Laser{time:LASER_TIME}
+                ));
             } else {
-            spawnlaser.cooldown -= time.delta_seconds();
+            spawnlaser.cooldown -= time.delta_secs();
         }
     }
 }
@@ -751,9 +747,9 @@ fn move_laser(
     mut query: Query<(Entity, &mut Transform, &mut Laser)>,
 ){
     for (entity, mut transform, mut laser) in query.iter_mut() {
-            let translation_change = transform.forward() * SPEED_LASER * time.delta_seconds();
+            let translation_change = transform.forward() * SPEED_LASER * time.delta_secs();
             transform.translation += translation_change;
-        laser.time -= time.delta_seconds();
+        laser.time -= time.delta_secs();
         if laser.time < 0.0 {
             commands.entity(entity).despawn_recursive();
         }

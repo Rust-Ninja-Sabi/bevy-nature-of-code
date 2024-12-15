@@ -1,11 +1,13 @@
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext, EguiPlugin};
+use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy::render::mesh::PrimitiveTopology;
 
 use orbitcamera::{OrbitCameraPlugin,OrbitCamera};
 mod orbitcamera;
 
 use std::f32::consts::PI;
+use bevy::color::palettes::basic::{BLUE, LIME};
+use bevy::window::WindowResolution;
 
 const HEIGHT: f32 = 640.0;
 const WIDTH: f32 = 960.0;
@@ -15,6 +17,7 @@ const RADIUS: f32 = 8.0;
 const MAX_LIMIT: f32 = 8.0;
 const MIN_LIMIT: f32 = -8.0;
 
+#[derive(Resource)]
 struct UiValues{
     restart: bool
 }
@@ -59,26 +62,29 @@ struct PendulumLine{}
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::WHITE))
-        .insert_resource(Msaa { samples: 4 })
-        .insert_resource(WindowDescriptor{
-            width: WIDTH,
-            height: HEIGHT,
-            title:"Example 3".to_string(),
-            resizable: false,
-            ..Default::default()
-        })
         .insert_resource(UiValues{
             restart: true
         })
-        .add_plugins(DefaultPlugins)
-        .add_plugin(EguiPlugin)
-        .add_plugin(OrbitCameraPlugin)
-        .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_scene)
-        .add_startup_system(spawn_limit_cube)
-        .add_startup_system(spawn_pendulum)
-        .add_system(ui_egui)
-        .add_system(moving)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Example 3".to_string(),
+                resolution: WindowResolution::new(WIDTH,  HEIGHT),
+                resizable: false,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins((
+            EguiPlugin,
+            OrbitCameraPlugin
+        ))
+        .add_systems(Startup, (spawn_camera,
+                      spawn_scene,
+                      spawn_limit_cube,
+                      spawn_pendulum)
+        )
+        .add_systems(Update, (ui_egui,
+                              moving))
         .run();
 }
 
@@ -86,18 +92,18 @@ fn spawn_scene(
     mut commands:Commands,
 ){
     //light
-    commands.spawn_bundle(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+                       DirectionalLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform {
+        Transform {
             translation: Vec3::new(0.0, 4.0, 0.0),
             rotation: Quat::from_rotation_x(-PI),
             ..default()
-        },
-        ..default()
-    });
+        }
+    ));
+
     // ambient light
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
@@ -108,13 +114,14 @@ fn spawn_scene(
 fn spawn_camera(
     mut commands:Commands
 ){
-    commands.spawn_bundle(Camera3dBundle{
-        ..default()
-    })
-        .insert(OrbitCamera{
+    commands.spawn((
+        Camera3d::default(),
+        Msaa::Sample4,
+        OrbitCamera{
             distance : 28.0,
             ..default()
-        });
+        }
+    ));
 }
 
 fn spawn_pendulum(
@@ -123,32 +130,31 @@ fn spawn_pendulum(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ){
     //line
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(0.2, RADIUS, 0.2))),
-        material: materials.add(StandardMaterial {
-            base_color: Color::LIME_GREEN,
-            emissive: Color::LIME_GREEN,
+    commands.spawn((
+        Mesh3d(meshes.add(Mesh::from(Cuboid::new(0.2, RADIUS, 0.2)))),
+        MeshMaterial3d( materials.add(StandardMaterial {
+            base_color: Color::Srgba(LIME),
+            emissive: Color::Srgba(LIME).into(),
             ..Default::default()
-        }),
-        transform: Transform {
+        })),
+        Transform {
             translation: Vec3::new(0.0, RADIUS/2.0, 0.0),
             ..default()
         },
-        ..Default::default()
-    })
-        .insert(PendulumLine{});
+        PendulumLine{}
+    ));
 
     //sphere
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::UVSphere {
+        commands.spawn((
+           Mesh3d(meshes.add(Mesh::from(Sphere {
                 radius: 1.0,
-                sectors: 32,
-                stacks: 32
+            }))),
+           MeshMaterial3d(materials.add( StandardMaterial {
+                base_color: Color::Srgba(BLUE),
+                ..Default::default()
             })),
-            material: materials.add(Color::BLUE.into()),
-            ..default()
-        })
-            .insert(Pendulum{..default()});
+           Pendulum{..default()}
+        ));
 }
 
 fn moving(
@@ -167,8 +173,8 @@ fn moving(
     }
     pendulum.circle_acceleration = (-1.0 * gravity / RADIUS) * pendulum.angle.sin();
 
-    pendulum.circle_velocity += pendulum.circle_acceleration * time.delta_seconds();
-    pendulum.angle += pendulum.circle_velocity * time.delta_seconds();
+    pendulum.circle_velocity += pendulum.circle_acceleration * time.delta_secs();
+    pendulum.angle += pendulum.circle_velocity * time.delta_secs();
 
     pendulum.circle_velocity *= pendulum.daming;
 
@@ -231,25 +237,31 @@ fn spawn_limit_cube(
             j = i;
         }
     }
-    let mut mesh = Mesh::new(PrimitiveTopology::LineList);
 
-    mesh.set_indices(Some(bevy::render::mesh::Indices::U32(indices)));
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::LineList,
+        bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD,
+    );
+
+    mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
 
     commands
-        .spawn_bundle(PbrBundle {
-            mesh: meshes.add(mesh),
-            material: materials.add(Color::LIME_GREEN.into()),
-            ..Default::default()
-        });
+        .spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d( materials.add( StandardMaterial {
+                base_color: Color::Srgba(LIME),
+                ..Default::default()
+            }))
+        ));
 }
 
 fn ui_egui(
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_contexts: EguiContexts,
     mut ui_values: ResMut<UiValues>,
 ){
-    egui::Window::new("Properties").show(egui_context.ctx_mut(), |ui|{
+    egui::Window::new("Properties").show(egui_contexts.ctx_mut(), |ui|{
         if ui.button("Restart").clicked() {
             ui_values.restart = true;
         }

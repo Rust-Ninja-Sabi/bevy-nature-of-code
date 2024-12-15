@@ -6,7 +6,7 @@ pub struct SkyboxPlugin;
 impl Plugin for SkyboxPlugin {
     fn build(&self, app: &mut App){
         app
-            .add_startup_system(setup_skybox);
+            .add_systems(Startup, setup_skybox);
     }
 }
 
@@ -44,10 +44,10 @@ fn setup_skybox(
         let store_aspect = 1.0;
 
         let store_quad_width = SIZE;
-        let store_quad_handle = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(
+        let store_quad_handle = meshes.add(Mesh::from(Rectangle::new(
             store_quad_width,
             store_quad_width * store_aspect,
-        ))));
+        )));
 
         let store_material_handle = materials.add(StandardMaterial {
             base_color_texture: Some(store_texture_handle.clone()),
@@ -55,15 +55,14 @@ fn setup_skybox(
             ..Default::default()
         });
 
-        commands.spawn_bundle(PbrBundle {
-            mesh: store_quad_handle.clone(),
-            material: store_material_handle,
-            transform: Transform {
+        commands.spawn((
+            Mesh3d(store_quad_handle.clone()),
+            MeshMaterial3d(store_material_handle),
+            Transform {
                 translation: translations[i],
                 rotation: rotations[i],
                 ..Default::default()
-            },
-            ..Default::default()
-        });
+            }
+        ));
     }
 }
