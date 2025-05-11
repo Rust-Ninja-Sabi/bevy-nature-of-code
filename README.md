@@ -49,7 +49,12 @@ https://www.youtube.com/watch?v=LltugBg4dtk
 
 <img src="img/chapter5space.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
+## chapter 6 _ Physics Libraries
 
-```Rust
+Book: https://natureofcode.com/physics-libraries/
 
-```
+<img src="img/chapter6minimal.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
+<img src="img/chapter6.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+
+<img src="img/chapter6forces.gif" width="320" align="left"><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
